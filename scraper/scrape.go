@@ -105,5 +105,5 @@ func prepareAllowedDomain(requestURL string) ([]string, error) {
 }
 
 func trimProtocol(requestURL string) string {
-	return strings.Trim(strings.Trim(requestURL, "http://"), "https://")
+	return strings.TrimPrefix(strings.TrimPrefix(requestURL, "http://"), "https://")
 }
