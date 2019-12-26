@@ -17,6 +17,7 @@ type Parameters struct {
 	PrintLogs           bool
 	FollowExternalLinks bool
 	JSWait              bool
+	Debug               bool
 }
 
 // Initiate new scraper

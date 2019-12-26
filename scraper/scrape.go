@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/chromedp/chromedp"
-
 	"github.com/gocolly/colly"
+	"github.com/gocolly/colly/debug"
 )
 
 // Scrape is responsible for main scraping logic
@@ -16,8 +16,14 @@ func (s *Scraper) Scrape(scrapedEmails *[]string) error {
 	// Configure colly
 	c := colly.NewCollector()
 
-	c.MaxDepth = s.MaxDepth
 	c.Async = s.Async
+	c.MaxDepth = s.MaxDepth
+	s.Website = trimProtocol(s.Website)
+
+	if s.Debug {
+		c.SetDebugger(&debug.LogDebugger{})
+	}
+
 	if !s.FollowExternalLinks {
 		allowedDomains, err := prepareAllowedDomain(s.Website)
 		if err != nil {
@@ -25,7 +31,6 @@ func (s *Scraper) Scrape(scrapedEmails *[]string) error {
 		}
 		c.AllowedDomains = allowedDomains
 	}
-	s.Website = trimProtocol(s.Website)
 
 	if s.JSWait {
 		c.OnResponse(func(response *colly.Response) {
