@@ -2,7 +2,7 @@ package scraper
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -13,7 +13,7 @@ import (
 
 // Scrape is responsible for main scraping logic
 func (s *Scraper) Scrape(scrapedEmails *[]string) error {
-	// Configure colly
+	// Initiate colly
 	c := colly.NewCollector()
 
 	c.Async = s.Async
@@ -29,25 +29,16 @@ func (s *Scraper) Scrape(scrapedEmails *[]string) error {
 		if err != nil {
 			return err
 		}
+
 		c.AllowedDomains = allowedDomains
 	}
 
 	if s.JSWait {
 		c.OnResponse(func(response *colly.Response) {
-			ctx, cancel := chromedp.NewContext(context.Background())
-			defer cancel()
-
-			var res string
-			err := chromedp.Run(ctx,
-				chromedp.Navigate(response.Request.URL.String()),
-				chromedp.InnerHTML("html", &res), // Scrape whole rendered page
-			)
-			if err != nil {
-				log.Println(err)
+			if err := initiateChromeSession(response); err != nil {
+				s.Log(err)
 				return
 			}
-
-			response.Body = []byte(res)
 		})
 	}
 
@@ -74,17 +65,15 @@ func (s *Scraper) Scrape(scrapedEmails *[]string) error {
 		s.Log("error while visiting: ", err.Error())
 	}
 
-	// Wait for concurrent scrapes to finish
-	c.Wait()
+	c.Wait() // Wait for concurrent scrapes to finish
 
 	if scrapedEmails == nil {
-		// Start the scrape
+		// Start the scrape on insecure url
 		if err := c.Visit(s.GetWebsite(false)); err != nil {
 			s.Log("error while visiting: ", err.Error())
 		}
 
-		// Wait for concurrent scrapes to finish
-		c.Wait()
+		c.Wait() // Wait for concurrent scrapes to finish
 	}
 
 	return nil
@@ -93,12 +82,14 @@ func (s *Scraper) Scrape(scrapedEmails *[]string) error {
 // Trim the input domain to whitelist root
 func prepareAllowedDomain(requestURL string) ([]string, error) {
 	requestURL = "https://" + trimProtocol(requestURL)
+
 	u, err := url.ParseRequestURI(requestURL)
 	if err != nil {
 		return nil, err
 	}
-	hostname := u.Hostname()
-	domain := strings.TrimLeft(hostname, "wwww.")
+
+	domain := strings.TrimPrefix(u.Hostname(), "wwww.")
+
 	return []string{
 		domain,
 		"www." + domain,
@@ -111,4 +102,20 @@ func prepareAllowedDomain(requestURL string) ([]string, error) {
 
 func trimProtocol(requestURL string) string {
 	return strings.TrimPrefix(strings.TrimPrefix(requestURL, "http://"), "https://")
+}
+
+func initiateChromeSession(response *colly.Response) error {
+	ctx, cancel := chromedp.NewContext(context.Background())
+	defer cancel()
+
+	var res string
+	if err := chromedp.Run(ctx, chromedp.Navigate(response.Request.URL.String()),
+		chromedp.InnerHTML("html", &res), // Scrape whole rendered page
+	); err != nil {
+		return fmt.Errorf("executing chromedp: %w", err)
+	}
+
+	response.Body = []byte(res)
+
+	return nil
 }
